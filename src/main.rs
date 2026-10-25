@@ -89,14 +89,25 @@ fn run_cmd(opts: &RunOpts) -> i32 {
         log_path: &log_path,
     };
     let outcome = run::run(&opts.cmd, file, &watch);
-    let raw = text::read(&path).unwrap_or(text::Bytes::Empty);
+    let scan_opts = summary::Opts {
+        budget: opts.budget,
+        tail: opts.tail,
+        failed: outcome.code != 0,
+        grep: grep.as_ref(),
+    };
+    let scanned = std::fs::File::open(&path).and_then(|f| summary::summarize(f, &scan_opts));
+    let summary = match scanned {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("q: cannot read the log {log_path}: {e}");
+            summary::summarize(std::io::empty(), &scan_opts).expect("reading nothing cannot fail")
+        }
+    };
     let report = report::Report {
         cmd: &opts.cmd,
         outcome: &outcome,
         log: &log_path,
-        raw: &raw,
-        budget: opts.budget,
-        tail: opts.tail,
+        summary: &summary,
         grep: grep.as_ref(),
     };
     let out = if opts.json {

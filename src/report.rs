@@ -1,8 +1,9 @@
 //! The result of one run, printed as the text summary (header line + sections) or as one JSON
-//! object (`--json`). Both come from the same `summary::pick`, so they always agree.
+//! object (`--json`). Both come from the same `summary::Summary`, so they always agree.
 
 use crate::run::{Outcome, Stop};
-use crate::{signals, summary, text};
+use crate::signals;
+use crate::summary::{self, Numbered, Summary};
 use regex::Regex;
 use serde_json::{json, Value};
 use std::time::Duration;
@@ -11,9 +12,7 @@ pub struct Report<'a> {
     pub cmd: &'a [String],
     pub outcome: &'a Outcome,
     pub log: &'a str,
-    pub raw: &'a [u8],
-    pub budget: usize,
-    pub tail: usize,
+    pub summary: &'a Summary,
     pub grep: Option<&'a Regex>,
 }
 
@@ -43,23 +42,16 @@ impl Report<'_> {
     }
 
     pub fn text(&self) -> String {
-        if text::is_binary(self.raw) {
-            return self.header(&format!(
-                "{} bytes of binary output (not shown)",
-                self.raw.len()
-            ));
+        let s = self.summary;
+        if s.binary {
+            return self.header(&format!("{} bytes of binary output (not shown)", s.bytes));
         }
-        let lines = text::lines(self.raw);
-        let body = match self.grep {
-            Some(re) => summary::grep(&lines, re, self.budget),
-            None => summary::render(&lines, &self.pick(&lines)),
+        let body = match (self.grep, &s.grep) {
+            (Some(re), Some(g)) => summary::render_grep(g, re.as_str()),
+            _ => summary::render(s),
         };
-        let n = lines.len();
+        let n = s.lines;
         self.header(&format!("{n} line{}", if n == 1 { "" } else { "s" })) + &body
-    }
-
-    fn pick(&self, lines: &[text::Line]) -> summary::Picked {
-        summary::pick(lines, self.budget, self.tail, self.outcome.code != 0)
     }
 
     pub fn json(&self) -> String {
@@ -77,13 +69,13 @@ impl Report<'_> {
             "seconds": round(o.elapsed.as_secs_f64()),
             "log": self.log,
             "command": self.cmd,
-            "bytes": self.raw.len(),
+            "bytes": self.summary.bytes,
             "stopped": stopped,
             "killed_by": if o.stopped.is_none() { o.signal.map(signals::name) } else { None },
         });
-        let binary = text::is_binary(self.raw);
-        v["binary"] = json!(binary);
-        if binary {
+        let s = self.summary;
+        v["binary"] = json!(s.binary);
+        if s.binary {
             v["lines"] = Value::Null;
             v["complete"] = json!(false);
             v["first_error"] = Value::Null;
@@ -93,28 +85,29 @@ impl Report<'_> {
             v["grep"] = Value::Null;
             return v.to_string();
         }
-        let lines = text::lines(self.raw);
-        let p = self.pick(&lines);
-        let entry = |i: usize| json!({"line": i + 1, "text": lines[i]});
-        v["lines"] = json!(lines.len());
-        v["complete"] = json!(p.complete);
-        v["first_error"] = json!(p.first_error.map(|i| i + 1));
-        v["error_block"] = Value::Array(p.block.iter().map(|&i| entry(i)).collect());
-        v["more_errors"] = match &p.more {
+        let entries = |l: &[Numbered]| {
+            Value::Array(
+                l.iter()
+                    .map(|(i, t)| json!({"line": i + 1, "text": t}))
+                    .collect(),
+            )
+        };
+        v["lines"] = json!(s.lines);
+        v["complete"] = json!(s.complete);
+        v["first_error"] = json!(s.first_error.map(|i| i + 1));
+        v["error_block"] = entries(&s.block);
+        v["more_errors"] = match &s.more {
             Some(m) => json!({"count": m.count, "from": m.from + 1, "to": m.to + 1}),
             None => Value::Null,
         };
-        v["tail"] = Value::Array((p.tail_from..lines.len()).map(entry).collect());
-        v["grep"] = match self.grep {
-            Some(re) => {
-                let (hits, total) = summary::grep_hits(&lines, re, self.budget);
-                json!({
-                    "pattern": re.as_str(),
-                    "total": total,
-                    "matches": hits.into_iter().map(entry).collect::<Vec<_>>(),
-                })
-            }
-            None => Value::Null,
+        v["tail"] = entries(&s.tail);
+        v["grep"] = match (self.grep, &s.grep) {
+            (Some(re), Some(g)) => json!({
+                "pattern": re.as_str(),
+                "total": g.total,
+                "matches": entries(&g.hits),
+            }),
+            _ => Value::Null,
         };
         v.to_string()
     }
@@ -155,16 +148,26 @@ mod tests {
         }
     }
 
-    fn report<'a>(o: &'a Outcome, raw: &'a [u8], cmd: &'a [String]) -> Report<'a> {
-        Report {
+    fn scan(o: &Outcome, raw: &[u8]) -> Summary {
+        let opts = summary::Opts {
+            budget: 40,
+            tail: 15,
+            failed: o.code != 0,
+            grep: None,
+        };
+        summary::summarize(raw, &opts).unwrap()
+    }
+
+    fn json(o: &Outcome, raw: &[u8], cmd: &[String]) -> Value {
+        let s = scan(o, raw);
+        let r = Report {
             cmd,
             outcome: o,
             log: "/tmp/q/x-1.log",
-            raw,
-            budget: 40,
-            tail: 15,
+            summary: &s,
             grep: None,
-        }
+        };
+        serde_json::from_str(&r.json()).unwrap()
     }
 
     #[test]
@@ -180,7 +183,7 @@ mod tests {
         }
         let cmd = vec!["make".to_string()];
         let o = outcome(2, None);
-        let v: Value = serde_json::from_str(&report(&o, raw.as_bytes(), &cmd).json()).unwrap();
+        let v = json(&o, raw.as_bytes(), &cmd);
         assert_eq!(v["exit"], 2);
         assert_eq!(v["seconds"], 1.234);
         assert_eq!(v["lines"], 200);
@@ -200,7 +203,7 @@ mod tests {
     fn json_short_and_stopped() {
         let cmd = vec!["x".to_string()];
         let o = outcome(124, Some(Stop::Timeout(Duration::from_secs(30))));
-        let v: Value = serde_json::from_str(&report(&o, b"a\nb\n", &cmd).json()).unwrap();
+        let v = json(&o, b"a\nb\n", &cmd);
         assert_eq!(v["complete"], true);
         assert_eq!(
             v["tail"],
@@ -210,7 +213,7 @@ mod tests {
             v["stopped"],
             json!({"reason": "timeout", "after_seconds": 30.0})
         );
-        let v: Value = serde_json::from_str(&report(&o, b"\0\x01", &cmd).json()).unwrap();
+        let v = json(&o, b"\0\x01", &cmd);
         assert_eq!(v["binary"], true);
         assert!(v["lines"].is_null());
     }
@@ -219,8 +222,16 @@ mod tests {
     fn text_matches_old_header() {
         let cmd = vec!["x".to_string()];
         let o = outcome(0, None);
+        let s = scan(&o, b"hi\n");
+        let r = Report {
+            cmd: &cmd,
+            outcome: &o,
+            log: "/tmp/q/x-1.log",
+            summary: &s,
+            grep: None,
+        };
         assert_eq!(
-            report(&o, b"hi\n", &cmd).text(),
+            r.text(),
             "q: exit 0 · 1.2s · 1 line · log /tmp/q/x-1.log\nhi\n"
         );
     }

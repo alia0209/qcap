@@ -45,6 +45,8 @@ against the release binary). Needs `shellcheck`.
   `error TS..`, `...Error`, `Traceback`, `REFUSED`/`refused`, `assert`, `(fail)`, `✗✖✘`, TAP
   `not ok`, `FAIL` at line start) when any exist, else at any error line (`error`/`fail` at a word
   start). `0 failed`/`0 errors` and passing-test lines (`... ok`, `(pass)`, `✓`) never match.
+  After the first group, a match whose trimmed text is already in a group or in the tail starts
+  no group (pytest/vitest repeat one assertion per failing test).
   Left-over matches: `-- N more error lines before the tail: q show A-B --`. Then
   `-- last lines: A-B --` and the tail. On success only the tail.
 - Binary output (NUL or mostly invalid UTF-8): header says `N bytes of binary output (not shown)`.
@@ -67,8 +69,10 @@ against the release binary). Needs `shellcheck`.
   still-running note), exit codes.
 - `src/signals.rs` signal handler, forwarding to the command's process group.
 - `src/logpath.rs` slug, atomic next `<slug>-<n>.log`, pruning, newest log per directory.
-- `src/text.rs` raw bytes -> display lines, binary detection.
-- `src/summary.rs` error matching (strong/weak), `pick` (error block, tail), grep, text render.
+- `src/text.rs` `Lines`: streaming reader of cleaned display lines (bounded per line, even for a
+  huge `\r` progress line), binary detection.
+- `src/summary.rs` error matching (strong/weak), `summarize`: one streaming pass with bounded
+  memory (head for short output, tail ring, error groups, grep hits), text render.
 - `src/show.rs` `q last`, `q show` ranges.
 - `src/hook.rs` PreToolUse hook I/O, hint text, per-session rate limit.
 - `src/pipeline.rs` shell-command analysis: does it cap a gate or an `&&` step, and the `q` rewrite.

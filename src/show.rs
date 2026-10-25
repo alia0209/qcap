@@ -1,6 +1,7 @@
 //! `q last` and `q show`: get back to the newest log without hunting for its path.
 
-use crate::{logpath, text};
+use crate::{logpath, text::Lines};
+use std::fs::File;
 use std::path::PathBuf;
 
 const DEFAULT_SPAN: usize = 40;
@@ -53,29 +54,45 @@ pub fn show(first: Option<&str>, second: Option<&str>) -> Result<String, String>
         Some(p) => PathBuf::from(p),
         None => PathBuf::from(last()?),
     };
-    let raw = text::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let lines = text::lines(&raw);
-    if lines.is_empty() {
+    let err = |e: std::io::Error| format!("{}: {e}", path.display());
+    let open = || File::open(&path).map(Lines::new).map_err(err);
+    // Only `-N` needs the line count up front; everything else is one streaming pass.
+    let total = if spec.is_some_and(|s| s.starts_with('-')) {
+        let mut n = 0;
+        for l in open()? {
+            l.map_err(err)?;
+            n += 1;
+        }
+        n
+    } else {
+        0
+    };
+    let (a, b) = range(spec, total)?;
+    let b = b.min(a.saturating_add(MAX_SPAN - 1));
+    let mut picked = Vec::new();
+    let mut n = 0;
+    for l in open()? {
+        let l = l.map_err(err)?;
+        n += 1;
+        if (a..=b).contains(&n) {
+            picked.push(l);
+        }
+    }
+    if n == 0 {
         return Ok(format!("-- {} is empty --\n", path.display()));
     }
-    let (a, b) = range(spec, lines.len())?;
-    if a > lines.len() {
+    if a > n {
         return Err(format!(
-            "line {a} is past the end of {} ({} lines)",
-            path.display(),
-            lines.len()
+            "line {a} is past the end of {} ({n} lines)",
+            path.display()
         ));
     }
-    let b = b.min(lines.len()).min(a + MAX_SPAN - 1);
-    let mut out = format!(
-        "-- {} lines {a}-{b} of {} --\n",
-        path.display(),
-        lines.len()
-    );
-    for (i, l) in lines.iter().enumerate().take(b).skip(a - 1) {
-        out.push_str(&format!("{}: {l}\n", i + 1));
+    let b = b.min(n);
+    let mut out = format!("-- {} lines {a}-{b} of {n} --\n", path.display());
+    for (i, l) in picked.iter().enumerate() {
+        out.push_str(&format!("{}: {l}\n", a + i));
     }
-    if b < lines.len() && spec.is_some_and(|s| s.ends_with('-')) {
+    if b < n && spec.is_some_and(|s| s.ends_with('-')) {
         out.push_str(&format!(
             "-- more: q show {}- {} --\n",
             b + 1,

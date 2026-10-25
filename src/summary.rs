@@ -1,8 +1,11 @@
-//! Picks what to print from the log lines: everything if short, else the first error block
-//! (failures only) and the tail, or only grep matches.
+//! Picks what to print from a log in one streaming pass: everything if short, else the first
+//! error block (failures only) and the tail, or only grep matches. Memory stays bounded by the
+//! line budget, however long the log.
 
-use crate::text::Line;
+use crate::text::{self, Lines};
 use regex::Regex;
+use std::collections::{HashSet, VecDeque};
+use std::io::{self, Cursor, Read};
 use std::sync::OnceLock;
 
 const CONTEXT: usize = 3;
@@ -48,43 +51,26 @@ pub fn is_error(line: &str) -> bool {
     !pass_re().is_match(line) && error_re().is_match(&zero_re().replace_all(line, ""))
 }
 
-fn is_strong(line: &str) -> bool {
-    is_error(line) && strong_re().is_match(line)
+/// Whether a line is an error line, and whether it is a strong one. Worked out once per line
+/// and shared by both finders.
+#[derive(Clone, Copy)]
+struct Kind {
+    error: bool,
+    strong: bool,
 }
 
-/// Which lines start error groups: the strong ones when there are any, else every error line.
-fn matcher(lines: &[Line]) -> fn(&str) -> bool {
-    if lines.iter().any(|l| is_strong(l)) {
-        is_strong
-    } else {
-        is_error
+fn kind(line: &str) -> Kind {
+    let error = is_error(line);
+    Kind {
+        error,
+        strong: error && strong_re().is_match(line),
     }
 }
 
-/// Line indices (0-based) of the first error block: grep -C3 groups from the first match on,
-/// at most `budget` lines.
-pub fn error_block(lines: &[Line], budget: usize) -> Vec<usize> {
-    let hit = matcher(lines);
-    let mut picked: Vec<usize> = Vec::new();
-    for (i, l) in lines.iter().enumerate() {
-        if !hit(l) {
-            continue;
-        }
-        let from = i.saturating_sub(CONTEXT);
-        let to = (i + CONTEXT).min(lines.len() - 1);
-        for j in from..=to {
-            if picked.len() == budget {
-                return picked;
-            }
-            if picked.last().is_none_or(|&last| j > last) {
-                picked.push(j);
-            }
-        }
-    }
-    picked
-}
+/// A 0-based line index and its display text.
+pub type Numbered = (usize, String);
 
-/// Error matches above the tail that didn't fit in the error block (0-based, inclusive).
+/// Error matches above the tail that the error block doesn't show (0-based, inclusive).
 #[derive(Debug, PartialEq)]
 pub struct More {
     pub count: usize,
@@ -92,80 +78,351 @@ pub struct More {
     pub to: usize,
 }
 
-/// What to show of a log, as line indices (0-based). Rendered as text by `render`, as JSON by
-/// `report`.
-#[derive(Debug, PartialEq)]
-pub struct Picked {
-    /// The whole output fits: `tail_from` is 0 and there is no error block.
-    pub complete: bool,
-    pub first_error: Option<usize>,
-    pub block: Vec<usize>,
-    pub more: Option<More>,
-    pub tail_from: usize,
+pub struct Grep {
+    pub hits: Vec<Numbered>,
+    pub total: usize,
 }
 
-pub fn pick(lines: &[Line], budget: usize, tail: usize, failed: bool) -> Picked {
-    if lines.len() <= budget + tail {
-        return Picked {
-            complete: true,
+pub struct Opts<'a> {
+    pub budget: usize,
+    pub tail: usize,
+    pub failed: bool,
+    pub grep: Option<&'a Regex>,
+}
+
+/// What to show of a log. Rendered as text by `render`, as JSON by `report`.
+pub struct Summary {
+    pub bytes: u64,
+    pub binary: bool,
+    pub lines: usize,
+    /// The whole output fits: `tail` holds every line and there is no error block.
+    pub complete: bool,
+    pub first_error: Option<usize>,
+    pub block: Vec<Numbered>,
+    pub more: Option<More>,
+    pub tail: Vec<Numbered>,
+    pub grep: Option<Grep>,
+}
+
+/// An error match and the context around it, merged with any matches inside that context.
+struct Group {
+    trigger: usize,
+    key: String,
+    lines: Vec<(usize, String, bool)>,
+}
+
+/// Collects error groups for one notion of "error line" (strong or any). Holds at most `cap`
+/// lines; the final cut to the budget happens in `finish`, once the tail is known.
+struct Finder {
+    strong: bool,
+    groups: Vec<Group>,
+    stored: usize,
+    cap: usize,
+    full: bool,
+    after: usize,
+    last_added: Option<usize>,
+    /// Trigger texts already in a group: a repeat of the same failure line starts no new group.
+    keys: HashSet<String>,
+    matches: usize,
+    /// The newest match indices, enough to find the last one above the tail.
+    recent: VecDeque<usize>,
+    recent_cap: usize,
+    /// Matches that start no group (repeats, or past `cap`): the first, and the newest few.
+    skipped_first: Option<usize>,
+    skipped: VecDeque<usize>,
+}
+
+fn key(line: &str) -> String {
+    line.trim().to_string()
+}
+
+impl Finder {
+    fn new(strong: bool, cap: usize, tail: usize) -> Self {
+        Finder {
+            strong,
+            groups: Vec::new(),
+            stored: 0,
+            cap,
+            full: false,
+            after: 0,
+            last_added: None,
+            keys: HashSet::new(),
+            matches: 0,
+            recent: VecDeque::new(),
+            recent_cap: tail + 1,
+            skipped_first: None,
+            skipped: VecDeque::new(),
+        }
+    }
+
+    fn skip(&mut self, i: usize) {
+        self.skipped_first.get_or_insert(i);
+        self.skipped.push_back(i);
+        if self.skipped.len() > self.recent_cap {
+            self.skipped.pop_front();
+        }
+    }
+
+    fn add(&mut self, i: usize, line: &str, m: bool) {
+        if let Some(g) = self.groups.last_mut() {
+            g.lines.push((i, line.to_string(), m));
+        }
+        self.stored += 1;
+        self.last_added = Some(i);
+        if self.stored >= self.cap {
+            self.full = true;
+        }
+    }
+
+    fn hit(&self, k: Kind) -> bool {
+        if self.strong {
+            k.strong
+        } else {
+            k.error
+        }
+    }
+
+    fn push(&mut self, i: usize, line: &str, k: Kind, before: &VecDeque<(usize, String, Kind)>) {
+        let m = self.hit(k);
+        if m {
+            self.matches += 1;
+            self.recent.push_back(i);
+            if self.recent.len() > self.recent_cap {
+                self.recent.pop_front();
+            }
+        }
+        if self.full {
+            if m {
+                self.skip(i);
+            }
+            return;
+        }
+        if self.after > 0 {
+            self.add(i, line, m);
+            if m {
+                self.keys.insert(key(line));
+                self.after = CONTEXT;
+            } else {
+                self.after -= 1;
+            }
+            return;
+        }
+        if !m {
+            return;
+        }
+        let k = key(line);
+        if !self.keys.insert(k.clone()) {
+            self.skip(i);
+            return;
+        }
+        self.groups.push(Group {
+            trigger: i,
+            key: k,
+            lines: Vec::new(),
+        });
+        for (j, l, jk) in before {
+            if self.last_added.is_none_or(|last| *j > last) && !self.full {
+                let jm = self.hit(*jk);
+                self.add(*j, l, jm);
+            }
+        }
+        self.add(i, line, true);
+        self.after = CONTEXT;
+    }
+
+    fn matches_above(&self, start: usize) -> usize {
+        self.matches - self.recent.iter().filter(|&&j| j >= start).count()
+    }
+
+    /// The error block from the groups above the tail (`start` on), at most `budget` lines.
+    /// After the first group, groups whose failure line the tail repeats are left out: the tail
+    /// shows it anyway.
+    fn finish(
+        self,
+        start: usize,
+        tail_keys: &HashSet<String>,
+        budget: usize,
+    ) -> (Option<usize>, Vec<Numbered>, Option<More>) {
+        let above = self.matches_above(start);
+        // First and last error match above the tail that the block leaves out.
+        let mut unshown: Option<(usize, usize)> = None;
+        let mut note = |j: usize| {
+            unshown = Some(unshown.map_or((j, j), |(a, b)| (a.min(j), b.max(j))));
+        };
+        if let Some(f) = self.skipped_first.filter(|&f| f < start) {
+            note(f);
+        }
+        if let Some(&l) = self.skipped.iter().rev().find(|&&j| j < start) {
+            note(l);
+        }
+        let mut block = Vec::new();
+        let mut first = None;
+        let mut shown = 0;
+        for g in self.groups {
+            if g.trigger >= start {
+                break;
+            }
+            // The first failure always shows: it is where the agent starts reading.
+            if tail_keys.contains(&g.key) && !block.is_empty() {
+                note(g.trigger);
+                continue;
+            }
+            for (j, l, m) in g.lines {
+                if j >= start {
+                    break;
+                }
+                if block.len() == budget {
+                    if m {
+                        note(j);
+                    }
+                    continue;
+                }
+                if m {
+                    shown += 1;
+                    first.get_or_insert(j);
+                }
+                block.push((j, l));
+            }
+        }
+        let first = first.filter(|_| !block.is_empty());
+        let more = match unshown {
+            Some((from, to)) if first.is_some() && above > shown => Some(More {
+                count: above - shown,
+                from,
+                to,
+            }),
+            _ => None,
+        };
+        (first, block, more)
+    }
+}
+
+pub fn summarize<R: Read>(mut r: R, o: &Opts) -> io::Result<Summary> {
+    let mut sample = Vec::new();
+    (&mut r)
+        .take(text::SAMPLE as u64)
+        .read_to_end(&mut sample)?;
+    if text::is_binary(&sample) {
+        let rest = io::copy(&mut r, &mut io::sink())?;
+        return Ok(Summary {
+            bytes: sample.len() as u64 + rest,
+            binary: true,
+            lines: 0,
+            complete: false,
             first_error: None,
             block: Vec::new(),
             more: None,
-            tail_from: 0,
+            tail: Vec::new(),
+            grep: None,
+        });
+    }
+    let fits = o.budget + o.tail;
+    let cap = 2 * o.budget + o.tail + 2 * CONTEXT + 1;
+    let mut head: Option<Vec<Numbered>> = Some(Vec::new());
+    let mut tail: VecDeque<Numbered> = VecDeque::new();
+    let mut before: VecDeque<(usize, String, Kind)> = VecDeque::new();
+    let mut finders = o.failed.then(|| {
+        (
+            Finder::new(true, cap, o.tail),
+            Finder::new(false, cap, o.tail),
+        )
+    });
+    let mut grep = o.grep.map(|_| Grep {
+        hits: Vec::new(),
+        total: 0,
+    });
+    let mut lines = Lines::new(Cursor::new(sample).chain(r));
+    let mut n = 0;
+    for line in lines.by_ref() {
+        let line = line?;
+        let k = if finders.is_some() {
+            kind(&line)
+        } else {
+            Kind {
+                error: false,
+                strong: false,
+            }
         };
+        if let Some((s, w)) = finders.as_mut() {
+            s.push(n, &line, k, &before);
+            w.push(n, &line, k, &before);
+        }
+        if let (Some(g), Some(re)) = (grep.as_mut(), o.grep) {
+            if re.is_match(&line) {
+                g.total += 1;
+                if g.hits.len() < o.budget {
+                    g.hits.push((n, line.clone()));
+                }
+            }
+        }
+        if let Some(h) = head.as_mut() {
+            if h.len() < fits {
+                h.push((n, line.clone()));
+            } else {
+                head = None;
+            }
+        }
+        before.push_back((n, line.clone(), k));
+        if before.len() > CONTEXT {
+            before.pop_front();
+        }
+        tail.push_back((n, line));
+        if tail.len() > o.tail {
+            tail.pop_front();
+        }
+        n += 1;
+    }
+    let mut s = Summary {
+        bytes: lines.bytes,
+        binary: false,
+        lines: n,
+        complete: false,
+        first_error: None,
+        block: Vec::new(),
+        more: None,
+        tail: tail.into(),
+        grep,
+    };
+    if let Some(all) = head {
+        s.complete = true;
+        s.tail = all;
+        return Ok(s);
     }
     // The tail is always printed whole, so the error block only looks above it: no line twice.
-    let start = lines.len().saturating_sub(tail);
-    let block = if failed {
-        error_block(&lines[..start], budget)
-    } else {
-        Vec::new()
-    };
-    let hit = matcher(&lines[..start]);
-    let first_error = block.iter().copied().find(|&i| hit(&lines[i]));
-    let more = first_error.and_then(|_| {
-        let after = block.last().map_or(0, |&l| l + 1);
-        let rest: Vec<usize> = (after..start).filter(|&i| hit(&lines[i])).collect();
-        Some(More {
-            count: rest.len(),
-            from: *rest.first()?,
-            to: *rest.last()?,
-        })
-    });
-    Picked {
-        complete: false,
-        first_error,
-        block: if first_error.is_some() {
-            block
+    let start = n - s.tail.len();
+    if let Some((strong, weak)) = finders {
+        let keys: HashSet<String> = s.tail.iter().map(|(_, l)| key(l)).collect();
+        let f = if strong.matches_above(start) > 0 {
+            strong
         } else {
-            Vec::new()
-        },
-        more,
-        tail_from: start,
+            weak
+        };
+        (s.first_error, s.block, s.more) = f.finish(start, &keys, o.budget);
     }
+    Ok(s)
 }
 
-pub fn render(lines: &[Line], p: &Picked) -> String {
+pub fn render(s: &Summary) -> String {
     let mut out = String::new();
-    if p.complete {
-        for l in lines {
+    if s.complete {
+        for (_, l) in &s.tail {
             out.push_str(l);
             out.push('\n');
         }
         return out;
     }
-    if let Some(first) = p.first_error {
+    if let Some(first) = s.first_error {
         out.push_str(&format!("-- first error: line {} --\n", first + 1));
         let mut prev: Option<usize> = None;
-        for &i in &p.block {
-            if prev.is_some_and(|p| i > p + 1) {
+        for (i, l) in &s.block {
+            if prev.is_some_and(|p| *i > p + 1) {
                 out.push_str("…\n");
             }
-            out.push_str(&format!("{}: {}\n", i + 1, lines[i]));
-            prev = Some(i);
+            out.push_str(&format!("{}: {l}\n", i + 1));
+            prev = Some(*i);
         }
     }
-    if let Some(m) = &p.more {
+    if let Some(m) = &s.more {
         out.push_str(&format!(
             "-- {} more error lines before the tail: q show {}-{} --\n",
             m.count,
@@ -173,13 +430,9 @@ pub fn render(lines: &[Line], p: &Picked) -> String {
             m.to + 1
         ));
     }
-    if p.tail_from < lines.len() {
-        out.push_str(&format!(
-            "-- last lines: {}-{} --\n",
-            p.tail_from + 1,
-            lines.len()
-        ));
-        for l in &lines[p.tail_from..] {
+    if let Some((first, _)) = s.tail.first() {
+        out.push_str(&format!("-- last lines: {}-{} --\n", first + 1, s.lines));
+        for (_, l) in &s.tail {
             out.push_str(l);
             out.push('\n');
         }
@@ -187,32 +440,17 @@ pub fn render(lines: &[Line], p: &Picked) -> String {
     out
 }
 
-#[cfg(test)]
-pub fn sections(lines: &[Line], budget: usize, tail: usize, failed: bool) -> String {
-    render(lines, &pick(lines, budget, tail, failed))
-}
-
-/// Matching line indices, at most `budget`, plus the total count.
-pub fn grep_hits(lines: &[Line], re: &Regex, budget: usize) -> (Vec<usize>, usize) {
-    let all: Vec<usize> = (0..lines.len())
-        .filter(|&i| re.is_match(&lines[i]))
-        .collect();
-    let total = all.len();
-    (all.into_iter().take(budget).collect(), total)
-}
-
-pub fn grep(lines: &[Line], re: &Regex, budget: usize) -> String {
-    let (hits, total) = grep_hits(lines, re, budget);
+pub fn render_grep(g: &Grep, pattern: &str) -> String {
     let mut out = String::new();
-    for &i in &hits {
-        out.push_str(&format!("{}: {}\n", i + 1, lines[i]));
+    for (i, l) in &g.hits {
+        out.push_str(&format!("{}: {l}\n", i + 1));
     }
-    if total == 0 {
-        out.push_str(&format!("(no lines match {})\n", re.as_str()));
-    } else if total > hits.len() {
+    if g.total == 0 {
+        out.push_str(&format!("(no lines match {pattern})\n"));
+    } else if g.total > g.hits.len() {
         out.push_str(&format!(
             "(+{} more matches in the log)\n",
-            total - hits.len()
+            g.total - g.hits.len()
         ));
     }
     out
@@ -222,8 +460,23 @@ pub fn grep(lines: &[Line], re: &Regex, budget: usize) -> String {
 mod tests {
     use super::*;
 
-    fn numbered(n: usize) -> Vec<Line<'static>> {
-        (1..=n).map(|i| format!("line {i}").into()).collect()
+    fn numbered(n: usize) -> Vec<String> {
+        (1..=n).map(|i| format!("line {i}")).collect()
+    }
+
+    fn scan(lines: &[String], budget: usize, tail: usize, failed: bool) -> Summary {
+        let raw = lines.join("\n");
+        let o = Opts {
+            budget,
+            tail,
+            failed,
+            grep: None,
+        };
+        summarize(raw.as_bytes(), &o).unwrap()
+    }
+
+    fn sections(lines: &[String], budget: usize, tail: usize, failed: bool) -> String {
+        render(&scan(lines, budget, tail, failed))
     }
 
     #[test]
@@ -250,12 +503,10 @@ mod tests {
 
     #[test]
     fn strong_errors_beat_a_failed_roll_call() {
-        let mut l: Vec<Line> = (0..100)
-            .map(|i| format!("test t{i} ... FAILED").into())
-            .collect();
+        let mut l: Vec<String> = (0..100).map(|i| format!("test t{i} ... FAILED")).collect();
         l.push("thread 't0' panicked at src/lib.rs:4:5:".into());
         l.push("assertion `left == right` failed: case 0".into());
-        l.extend((0..30).map(|i| format!("pad {i}").into()));
+        l.extend((0..30).map(|i| format!("pad {i}")));
         let out = sections(&l, 20, 5, true);
         assert!(out.contains("-- first error: line 101 --"));
         assert!(out.contains("102: assertion `left == right` failed"));
@@ -290,8 +541,8 @@ mod tests {
 
     #[test]
     fn budget_caps_error_block() {
-        let l: Vec<Line> = (0..500).map(|i| format!("error {i}").into()).collect();
-        assert_eq!(error_block(&l, 40).len(), 40);
+        let l: Vec<String> = (0..500).map(|i| format!("error {i}")).collect();
+        assert_eq!(scan(&l, 40, 15, true).block.len(), 40);
         let out = sections(&l, 10, 5, true);
         assert!(out.contains("-- 485 more error lines before the tail: q show 11-495 --"));
         assert_eq!(out.lines().count(), 1 + 10 + 1 + 1 + 5);
@@ -307,13 +558,49 @@ mod tests {
         assert_eq!(out.matches("panic here").count(), 1);
     }
 
+    /// pytest and vitest repeat one assertion message per failing test, and again in their
+    /// closing summary: the benchmark's flask run printed it three times.
+    #[test]
+    fn a_repeated_failure_line_is_shown_once() {
+        let mut l = numbered(300);
+        for at in [50, 100, 150, 290] {
+            l[at] = "E   AssertionError: assert 1 == 2".into();
+        }
+        l[200] = "E   KeyError: 'x'".into();
+        let s = scan(&l, 40, 15, true);
+        let out = render(&s);
+        // Once in the block (the first failure always shows), once in the tail, never again.
+        assert_eq!(out.matches("AssertionError").count(), 2);
+        assert_eq!(s.first_error, Some(50));
+        assert!(out.contains("201: E   KeyError: 'x'"));
+        assert_eq!(
+            s.more,
+            Some(More {
+                count: 2,
+                from: 100,
+                to: 150
+            })
+        );
+    }
+
     #[test]
     fn grep_numbers_and_caps() {
-        let l = numbered(100);
+        let raw = numbered(100).join("\n");
         let re = Regex::new("line 1").unwrap();
-        let out = grep(&l, &re, 3);
+        let o = Opts {
+            budget: 3,
+            tail: 15,
+            failed: false,
+            grep: Some(&re),
+        };
+        let g = summarize(raw.as_bytes(), &o).unwrap().grep.unwrap();
+        let out = render_grep(&g, re.as_str());
         assert!(out.starts_with("1: line 1\n10: line 10\n"));
         assert!(out.contains("(+9 more matches in the log)"));
-        assert!(grep(&l, &Regex::new("zzz").unwrap(), 3).contains("no lines match"));
+        let none = Grep {
+            hits: Vec::new(),
+            total: 0,
+        };
+        assert!(render_grep(&none, "zzz").contains("no lines match"));
     }
 }

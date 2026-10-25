@@ -21,34 +21,34 @@
 <text x="722" y="89.0" font-size="12" fill="#c3c2b7">61x less</text>
 <text x="178" y="119.0" font-size="12" text-anchor="end" fill="#f0efec">express-test-fail</text>
 <line x1="385.0" y1="115.0" x2="603.5" y2="115.0" stroke="#898781" stroke-width="2"/>
-<circle cx="603.5" cy="115.0" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"><title>express-test-fail: raw 15,159 tokens</title></circle>
+<circle cx="603.5" cy="115.0" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"><title>express-test-fail: raw 15,160 tokens</title></circle>
 <circle cx="385.0" cy="115.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>express-test-fail: q 316 tokens</title></circle>
 <text x="722" y="119.0" font-size="12" fill="#c3c2b7">48x less</text>
 <text x="178" y="149.0" font-size="12" text-anchor="end" fill="#f0efec">express-test</text>
 <line x1="340.2" y1="145.0" x2="602.5" y2="145.0" stroke="#898781" stroke-width="2"/>
-<circle cx="602.5" cy="145.0" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"><title>express-test: raw 14,902 tokens</title></circle>
+<circle cx="602.5" cy="145.0" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"><title>express-test: raw 14,903 tokens</title></circle>
 <circle cx="340.2" cy="145.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>express-test: q 143 tokens</title></circle>
 <text x="722" y="149.0" font-size="12" fill="#c3c2b7">104x less</text>
 <text x="178" y="179.0" font-size="12" text-anchor="end" fill="#f0efec">hono-test</text>
-<line x1="387.9" y1="175.0" x2="528.1" y2="175.0" stroke="#898781" stroke-width="2"/>
-<circle cx="528.1" cy="175.0" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"><title>hono-test: raw 3,991 tokens</title></circle>
+<line x1="387.9" y1="175.0" x2="528.2" y2="175.0" stroke="#898781" stroke-width="2"/>
+<circle cx="528.2" cy="175.0" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"><title>hono-test: raw 3,994 tokens</title></circle>
 <circle cx="387.9" cy="175.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>hono-test: q 333 tokens</title></circle>
 <text x="722" y="179.0" font-size="12" fill="#c3c2b7">12x less</text>
 <text x="178" y="209.0" font-size="12" text-anchor="end" fill="#f0efec">rg-test-fail</text>
-<line x1="373.7" y1="205.0" x2="521.7" y2="205.0" stroke="#898781" stroke-width="2"/>
-<circle cx="521.7" cy="205.0" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"><title>rg-test-fail: raw 3,560 tokens</title></circle>
-<circle cx="373.7" cy="205.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>rg-test-fail: q 259 tokens</title></circle>
+<line x1="374.2" y1="205.0" x2="521.7" y2="205.0" stroke="#898781" stroke-width="2"/>
+<circle cx="521.7" cy="205.0" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"><title>rg-test-fail: raw 3,562 tokens</title></circle>
+<circle cx="374.2" cy="205.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>rg-test-fail: q 261 tokens</title></circle>
 <text x="722" y="209.0" font-size="12" fill="#c3c2b7">14x less</text>
 <text x="178" y="239.0" font-size="12" text-anchor="end" fill="#f0efec">flask-test-fail</text>
-<line x1="419.5" y1="235.0" x2="465.0" y2="235.0" stroke="#898781" stroke-width="2"/>
+<line x1="412.0" y1="235.0" x2="465.0" y2="235.0" stroke="#898781" stroke-width="2"/>
 <circle cx="465.0" cy="235.0" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"><title>flask-test-fail: raw 1,304 tokens</title></circle>
-<circle cx="419.5" cy="235.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>flask-test-fail: q 583 tokens</title></circle>
-<text x="722" y="239.0" font-size="12" fill="#c3c2b7">2x less</text>
+<circle cx="412.0" cy="235.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>flask-test-fail: q 510 tokens</title></circle>
+<text x="722" y="239.0" font-size="12" fill="#c3c2b7">3x less</text>
 <text x="178" y="269.0" font-size="12" text-anchor="end" fill="#f0efec">hono-test-fail</text>
-<line x1="429.7" y1="265.0" x2="455.7" y2="265.0" stroke="#898781" stroke-width="2"/>
-<circle cx="455.7" cy="265.0" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"><title>hono-test-fail: raw 1,106 tokens</title></circle>
-<circle cx="429.7" cy="265.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>hono-test-fail: q 698 tokens</title></circle>
-<text x="722" y="269.0" font-size="12" fill="#c3c2b7">same</text>
+<line x1="399.2" y1="265.0" x2="455.8" y2="265.0" stroke="#898781" stroke-width="2"/>
+<circle cx="455.8" cy="265.0" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"><title>hono-test-fail: raw 1,109 tokens</title></circle>
+<circle cx="399.2" cy="265.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>hono-test-fail: q 407 tokens</title></circle>
+<text x="722" y="269.0" font-size="12" fill="#c3c2b7">3x less</text>
 <text x="178" y="299.0" font-size="12" text-anchor="end" fill="#f0efec">rg-compile-error</text>
 <line x1="416.1" y1="295.0" x2="419.8" y2="295.0" stroke="#898781" stroke-width="2"/>
 <circle cx="416.1" cy="295.0" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"><title>rg-compile-error: raw 549 tokens</title></circle>

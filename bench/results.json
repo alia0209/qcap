@@ -6,7 +6,7 @@
     "lines": 1404,
     "tokens": {
       "raw": 16001,
-      "harness": 8636,
+      "harness": 8631,
       "tail15": 216,
       "tail50": 577,
       "q": 264
@@ -19,8 +19,8 @@
     "exit": 1,
     "lines": 1994,
     "tokens": {
-      "raw": 15159,
-      "harness": 6342,
+      "raw": 15160,
+      "harness": 6343,
       "tail15": 234,
       "tail50": 461,
       "q": 316
@@ -39,8 +39,8 @@
     "exit": 0,
     "lines": 1972,
     "tokens": {
-      "raw": 14902,
-      "harness": 6342,
+      "raw": 14903,
+      "harness": 6343,
       "tail15": 104,
       "tail50": 323,
       "q": 143
@@ -53,8 +53,8 @@
     "exit": 0,
     "lines": 154,
     "tokens": {
-      "raw": 3991,
-      "harness": 3991,
+      "raw": 3994,
+      "harness": 3994,
       "tail15": 286,
       "tail50": 1302,
       "q": 333
@@ -67,11 +67,11 @@
     "exit": 101,
     "lines": 323,
     "tokens": {
-      "raw": 3560,
-      "harness": 3560,
-      "tail15": 141,
-      "tail50": 482,
-      "q": 259
+      "raw": 3562,
+      "harness": 3562,
+      "tail15": 147,
+      "tail50": 484,
+      "q": 261
     },
     "sees_failure": {
       "raw": true,
@@ -91,7 +91,7 @@
       "harness": 1304,
       "tail15": 190,
       "tail50": 486,
-      "q": 583
+      "q": 510
     },
     "sees_failure": {
       "raw": true,
@@ -107,11 +107,11 @@
     "exit": 1,
     "lines": 82,
     "tokens": {
-      "raw": 1106,
-      "harness": 1106,
+      "raw": 1109,
+      "harness": 1109,
       "tail15": 228,
       "tail50": 698,
-      "q": 698
+      "q": 407
     },
     "sees_failure": {
       "raw": true,

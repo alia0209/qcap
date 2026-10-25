@@ -48,26 +48,30 @@ We also checked whether each view contained the line that names the real failure
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/bench-dark.svg">
-  <img alt="Tokens per command, raw output versus q summary, log scale. The biggest gap is express's test suite: 14,902 tokens raw, 143 with q." src="docs/bench-light.svg">
+  <img alt="Tokens per command, raw output versus q summary, log scale. The biggest gap is express's test suite: 14,903 tokens raw, 143 with q." src="docs/bench-light.svg">
 </picture>
 
 | view | tokens, all 13 runs | failure visible (7 failing runs) | exit code kept |
 |---|---|---|---|
-| raw output | 57,678 | 7/7 | yes |
-| `tail -50` | 5,982 | 6/7 | no |
-| **`q`** | **4,465** | **7/7** | **yes** |
-| `tail -15` | 2,255 | 6/7 | no |
+| raw output | 57,688 | 7/7 | yes |
+| `tail -50` | 5,984 | 6/7 | no |
+| **`q`** | **4,103** | **7/7** | **yes** |
+| `tail -15` | 2,261 | 6/7 | no |
 
-- **Long output gets much smaller.** express's mocha suite prints 1,972 lines, 14,902 tokens;
+- **Long output gets much smaller.** express's mocha suite prints 1,972 lines, 14,903 tokens;
   `q` shows 143 (104x fewer). ripgrep's 1,404-line test run drops from 16,001 tokens to 264.
-  Over all 13 runs, `q` uses 12.9x fewer tokens than the raw output.
+  Over all 13 runs, `q` uses 14.1x fewer tokens than the raw output.
+- **A repeated failure shows once.** pytest and vitest print the same assertion message for every
+  failing test and again in their closing summary. After the first failure, the error block skips
+  a failure line it has already shown or that the tail will show. That cut hono's failing run
+  from 698 tokens to 407.
 - **Short output costs about 35 tokens more.** When a command prints less than 55 lines, `q`
   prints all of it plus its header line. Six of the 13 runs were that short.
 - **`tail` is cheaper but misses failures.** On hono, vitest named the failing test more than 50
   lines from the end, so `tail -15` and `tail -50` both missed it. `tail` also hides every exit
   code.
 - **A failure can cost more than `tail -50`.** On a failing run `q` prints the error block (up to
-  40 lines, `-n` changes it) and the tail. For flask's failing test that was 583 tokens against
+  40 lines, `-n` changes it) and the tail. For flask's failing test that was 510 tokens against
   `tail -50`'s 486.
 
 Per-run numbers are in [bench/results.md](bench/results.md). Tokens are counted with tiktoken's
@@ -132,8 +136,9 @@ q show /tmp/q/x.log 1-40
 `SomethingError`, `Traceback`, `assert`, `FAIL` at the start of a line, TAP `not ok`, `✗`. If
 there are none, it falls back to any line where `error` or `fail` starts a word. Lines like
 `0 failed`, `test foo ... ok` and `✓` never count. The error block is the matches with 3 lines
-of context, limited to `-n` lines and only from above the tail. It prints only when the command
-failed.
+of context, limited to `-n` lines and only from above the tail. A match whose text the block
+already shows, or that the tail repeats, starts no new group (the first failure always shows).
+The block prints only when the command failed.
 
 ### Agent harness timeouts
 
@@ -149,7 +154,9 @@ Agent harnesses kill commands that run too long. `q` handles that:
 
 ANSI color codes are stripped, only the last frame of `\r` progress bars is kept, and lines
 longer than 400 characters are cut. Binary output prints as one line. The log file is the raw,
-unchanged output. `/tmp` is often RAM-backed, so `q` stops a command once its log passes 512 MiB.
+unchanged output. `q` reads the log in one streaming pass and keeps only what it may print, so
+summarizing a 500 MiB log takes about 5 MB of memory. `/tmp` is often RAM-backed, so `q` stops a
+command once its log passes 512 MiB.
 Logs older than 2 days are deleted when a new one is created. `Q_DIR` changes the log directory.
 
 ### `--json`

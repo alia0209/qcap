@@ -1,51 +1,21 @@
 //! Turns raw log bytes into display lines: ANSI escapes stripped, `\r` progress redraws collapsed,
-//! very long lines cut. Lines borrow from the log where they can, so a huge log costs one
-//! pointer-sized entry per line rather than a copy of its text.
+//! very long lines cut. Lines are read one at a time with a fixed memory ceiling, however big
+//! the log or a single line in it.
 
-use memmap2::Mmap;
 use regex::Regex;
 use std::borrow::Cow;
-use std::fs::File;
-use std::ops::Deref;
-use std::path::Path;
+use std::io::{self, BufRead, BufReader, Read};
 use std::sync::OnceLock;
 
 const MAX_LINE: usize = 400;
+/// Bytes of an overlong line kept from its start, and from its end (for `\r` redraws).
+const KEEP: usize = 64 * 1024;
+/// Bytes sampled from the start of the log for binary detection.
+pub const SAMPLE: usize = 64 * 1024;
 
-/// One display line; borrowed from the log unless cleaning had to change it.
-pub type Line<'a> = Cow<'a, str>;
-
-/// A log's bytes, memory-mapped. `/tmp` is often tmpfs, where the mapping shares the pages that
-/// already hold the file instead of reading a second copy into the heap.
-pub enum Bytes {
-    Map(Mmap),
-    Empty,
-}
-
-impl Deref for Bytes {
-    type Target = [u8];
-    fn deref(&self) -> &[u8] {
-        match self {
-            Bytes::Map(m) => m,
-            Bytes::Empty => &[],
-        }
-    }
-}
-
-/// Maps the log. Nothing truncates a log once q has created it, which is what makes the
-/// mapping safe; a grandchild still appending past the mapped length is not seen.
-pub fn read(path: &Path) -> std::io::Result<Bytes> {
-    let file = File::open(path)?;
-    if file.metadata()?.len() == 0 {
-        return Ok(Bytes::Empty);
-    }
-    // SAFETY: see above; the file is only ever appended to.
-    Ok(Bytes::Map(unsafe { Mmap::map(&file)? }))
-}
-
-/// A NUL byte, or mostly invalid UTF-8, in the first 64 KiB.
-pub fn is_binary(raw: &[u8]) -> bool {
-    let sample = &raw[..raw.len().min(64 * 1024)];
+/// A NUL byte, or mostly invalid UTF-8, in the sample.
+pub fn is_binary(sample: &[u8]) -> bool {
+    let sample = &sample[..sample.len().min(SAMPLE)];
     if sample.contains(&0) {
         return true;
     }
@@ -56,18 +26,98 @@ pub fn is_binary(raw: &[u8]) -> bool {
     bad * 10 > sample.len()
 }
 
-pub fn lines(raw: &[u8]) -> Vec<Line<'_>> {
-    let mut out: Vec<Line> = raw
-        .split(|&b| b == b'\n')
-        .map(|l| match String::from_utf8_lossy(l) {
-            Cow::Borrowed(s) => clean(s),
-            Cow::Owned(s) => Cow::Owned(clean(&s).into_owned()),
-        })
-        .collect();
-    if out.last().is_some_and(|l| l.is_empty()) {
-        out.pop();
+/// Cleaned display lines from a reader. A final line without `\n` still counts; a trailing
+/// `\n` does not start an empty line.
+pub struct Lines<R: Read> {
+    r: BufReader<R>,
+    /// The first KEEP bytes of the current line.
+    head: Vec<u8>,
+    /// The last bytes of an overlong line, at most 2 x KEEP.
+    end: Vec<u8>,
+    /// Chars dropped from the middle of an overlong line.
+    dropped: usize,
+    pub bytes: u64,
+}
+
+impl<R: Read> Lines<R> {
+    pub fn new(r: R) -> Self {
+        Lines {
+            r: BufReader::with_capacity(64 * 1024, r),
+            head: Vec::new(),
+            end: Vec::new(),
+            dropped: 0,
+            bytes: 0,
+        }
     }
-    out
+
+    fn take(&mut self, chunk: &[u8]) {
+        let room = KEEP.saturating_sub(self.head.len());
+        let (h, rest) = chunk.split_at(room.min(chunk.len()));
+        self.head.extend_from_slice(h);
+        if rest.is_empty() {
+            return;
+        }
+        self.end.extend_from_slice(rest);
+        if self.end.len() > 2 * KEEP {
+            let cut = self.end.len() - KEEP;
+            self.dropped += chars(&self.end[..cut]);
+            self.end.drain(..cut);
+        }
+    }
+
+    fn finish_line(&mut self) -> String {
+        let line = if self.end.is_empty() {
+            clean(&String::from_utf8_lossy(&self.head)).into_owned()
+        } else if self.end.contains(&b'\r') {
+            // A progress bar redrawn with \r: the last frame is near the end.
+            clean(&String::from_utf8_lossy(&self.end)).into_owned()
+        } else {
+            let extra = self.dropped + chars(&self.end);
+            let head = String::from_utf8_lossy(&self.head);
+            let shown = ansi().replace_all(&head, "");
+            let count = shown.chars().count() + extra;
+            let kept: String = shown.chars().take(MAX_LINE).collect();
+            format!("{kept}…[+{} chars]", count - kept.chars().count())
+        };
+        self.head.clear();
+        self.end.clear();
+        self.dropped = 0;
+        line
+    }
+}
+
+impl<R: Read> Iterator for Lines<R> {
+    type Item = io::Result<String>;
+
+    fn next(&mut self) -> Option<io::Result<String>> {
+        let mut any = false;
+        loop {
+            let buf = match self.r.fill_buf() {
+                Ok(b) => b,
+                Err(e) if e.kind() == io::ErrorKind::Interrupted => continue,
+                Err(e) => return Some(Err(e)),
+            };
+            if buf.is_empty() {
+                return any.then(|| Ok(self.finish_line()));
+            }
+            any = true;
+            let (chunk, used, done) = match buf.iter().position(|&b| b == b'\n') {
+                Some(p) => (buf[..p].to_vec(), p + 1, true),
+                None => (buf.to_vec(), buf.len(), false),
+            };
+            self.r.consume(used);
+            self.bytes += used as u64;
+            self.take(&chunk);
+            if done {
+                return Some(Ok(self.finish_line()));
+            }
+        }
+    }
+}
+
+/// UTF-8 chars in a byte run (continuation bytes don't start one).
+fn chars(b: &[u8]) -> usize {
+    b.iter().filter(|&&c| c & 0xC0 != 0x80).count()
 }
 
 fn ansi() -> &'static Regex {
@@ -77,7 +127,7 @@ fn ansi() -> &'static Regex {
     })
 }
 
-fn clean(line: &str) -> Line<'_> {
+pub fn clean(line: &str) -> Cow<'_, str> {
     // ANSI first: in "msg\r\x1b[0m" the reset comes after the \r, and splitting on \r first
     // would keep only the reset and blank the line.
     match ansi().replace_all(line, "") {
@@ -92,7 +142,7 @@ fn last_frame(line: &str) -> &str {
     line.rsplit('\r').next().unwrap_or(line)
 }
 
-fn cut(line: &str) -> Line<'_> {
+fn cut(line: &str) -> Cow<'_, str> {
     // Byte length bounds the char count, so most lines skip counting.
     if line.len() <= MAX_LINE {
         return Cow::Borrowed(line);
@@ -103,6 +153,11 @@ fn cut(line: &str) -> Line<'_> {
     }
     let head: String = line.chars().take(MAX_LINE).collect();
     Cow::Owned(format!("{head}…[+{} chars]", count - MAX_LINE))
+}
+
+#[cfg(test)]
+pub fn lines(raw: &[u8]) -> Vec<String> {
+    Lines::new(raw).map(Result::unwrap).collect()
 }
 
 #[cfg(test)]
@@ -120,6 +175,7 @@ mod tests {
     #[test]
     fn trailing_newline_is_not_a_line() {
         assert_eq!(lines(b"a\nb\n").len(), 2);
+        assert_eq!(lines(b"a\n\n").len(), 2);
         assert!(lines(b"").is_empty());
     }
 
@@ -134,7 +190,11 @@ mod tests {
     #[test]
     fn long_lines_are_cut() {
         let long = "x".repeat(1000);
-        let l = lines(long.as_bytes());
-        assert!(l[0].ends_with("…[+600 chars]"));
+        assert!(lines(long.as_bytes())[0].ends_with("…[+600 chars]"));
+        // Past the per-line ceiling: the count stays exact, a \r redraw keeps its last frame.
+        let huge = "y".repeat(300_000);
+        assert!(lines(huge.as_bytes())[0].ends_with("…[+299600 chars]"));
+        let bar = format!("{}\rdone 100%\n", "10%\r".repeat(100_000));
+        assert_eq!(lines(bar.as_bytes()), vec!["done 100%"]);
     }
 }
