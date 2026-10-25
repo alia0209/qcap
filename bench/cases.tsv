@@ -1,0 +1,14 @@
+# name	repo	command	marker	setup
+rg-build-clean	ripgrep	cargo clean -q && cargo build	-
+rg-test	ripgrep	cargo test --workspace	-
+rg-test-fail	ripgrep	cargo test --workspace	empty_set_works	sd -F 'assert!(!set.is_match("a"));' 'assert!(set.is_match("a"));' crates/globset/src/lib.rs
+rg-compile-error	ripgrep	cargo clean -q && cargo build	E0308	printf '\npub fn broken() -> u32 { "nope" }\n' >> crates/globset/src/lib.rs
+hono-test	hono	bunx vitest run --project main src/	-
+hono-test-fail	hono	bunx vitest run --project main src/	Parse cookie with getCookie()	sd -F "toBe('choco')" "toBe('vanilla')" src/helper/cookie/index.test.ts
+hono-type-error	hono	bunx tsc -p tsconfig.spec.json	TS2322	printf "\nexport const broken: number = 'nope'\n" >> src/helper/cookie/index.ts
+flask-test	flask	.venv/bin/pytest	-
+flask-test-fail	flask	.venv/bin/pytest	test_options_work	sd -F '["GET", "HEAD", "OPTIONS", "POST"]' '["GET", "OPTIONS", "POST"]' tests/test_basic.py
+flask-import-error	flask	.venv/bin/pytest	NameError	printf '\nundefined_helper()\n' >> src/flask/helpers.py
+express-test	express	npm test	-
+express-test-fail	express	npm test	should respond with json for null	sd -F ".expect(200, 'null', done)" ".expect(200, 'nul', done)" test/res.json.js
+express-lint	express	npm run lint	-

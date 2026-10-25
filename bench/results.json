@@ -1,0 +1,226 @@
+[
+  {
+    "name": "rg-test",
+    "command": "cargo test --workspace",
+    "exit": 0,
+    "lines": 1404,
+    "tokens": {
+      "raw": 16001,
+      "harness": 8636,
+      "tail15": 216,
+      "tail50": 577,
+      "q": 264
+    },
+    "sees_failure": null
+  },
+  {
+    "name": "express-test-fail",
+    "command": "npm test",
+    "exit": 1,
+    "lines": 1994,
+    "tokens": {
+      "raw": 15159,
+      "harness": 6342,
+      "tail15": 234,
+      "tail50": 461,
+      "q": 316
+    },
+    "sees_failure": {
+      "raw": true,
+      "harness": false,
+      "tail15": true,
+      "tail50": true,
+      "q": true
+    }
+  },
+  {
+    "name": "express-test",
+    "command": "npm test",
+    "exit": 0,
+    "lines": 1972,
+    "tokens": {
+      "raw": 14902,
+      "harness": 6342,
+      "tail15": 104,
+      "tail50": 323,
+      "q": 143
+    },
+    "sees_failure": null
+  },
+  {
+    "name": "hono-test",
+    "command": "bunx vitest run --project main src/",
+    "exit": 0,
+    "lines": 154,
+    "tokens": {
+      "raw": 3991,
+      "harness": 3991,
+      "tail15": 286,
+      "tail50": 1302,
+      "q": 333
+    },
+    "sees_failure": null
+  },
+  {
+    "name": "rg-test-fail",
+    "command": "cargo test --workspace",
+    "exit": 101,
+    "lines": 323,
+    "tokens": {
+      "raw": 3560,
+      "harness": 3560,
+      "tail15": 141,
+      "tail50": 482,
+      "q": 259
+    },
+    "sees_failure": {
+      "raw": true,
+      "harness": true,
+      "tail15": true,
+      "tail50": true,
+      "q": true
+    }
+  },
+  {
+    "name": "flask-test-fail",
+    "command": ".venv/bin/pytest",
+    "exit": 1,
+    "lines": 132,
+    "tokens": {
+      "raw": 1304,
+      "harness": 1304,
+      "tail15": 190,
+      "tail50": 486,
+      "q": 583
+    },
+    "sees_failure": {
+      "raw": true,
+      "harness": true,
+      "tail15": true,
+      "tail50": true,
+      "q": true
+    }
+  },
+  {
+    "name": "hono-test-fail",
+    "command": "bunx vitest run --project main src/",
+    "exit": 1,
+    "lines": 82,
+    "tokens": {
+      "raw": 1106,
+      "harness": 1106,
+      "tail15": 228,
+      "tail50": 698,
+      "q": 698
+    },
+    "sees_failure": {
+      "raw": true,
+      "harness": true,
+      "tail15": false,
+      "tail50": false,
+      "q": true
+    }
+  },
+  {
+    "name": "rg-compile-error",
+    "command": "cargo clean -q && cargo build",
+    "exit": 101,
+    "lines": 41,
+    "tokens": {
+      "raw": 549,
+      "harness": 549,
+      "tail15": 210,
+      "tail50": 549,
+      "q": 586
+    },
+    "sees_failure": {
+      "raw": true,
+      "harness": true,
+      "tail15": true,
+      "tail50": true,
+      "q": true
+    }
+  },
+  {
+    "name": "rg-build-clean",
+    "command": "cargo clean -q && cargo build",
+    "exit": 0,
+    "lines": 35,
+    "tokens": {
+      "raw": 538,
+      "harness": 538,
+      "tail15": 288,
+      "tail50": 537,
+      "q": 574
+    },
+    "sees_failure": null
+  },
+  {
+    "name": "flask-test",
+    "command": ".venv/bin/pytest",
+    "exit": 0,
+    "lines": 35,
+    "tokens": {
+      "raw": 388,
+      "harness": 388,
+      "tail15": 179,
+      "tail50": 388,
+      "q": 422
+    },
+    "sees_failure": null
+  },
+  {
+    "name": "flask-import-error",
+    "command": ".venv/bin/pytest",
+    "exit": 4,
+    "lines": 13,
+    "tokens": {
+      "raw": 137,
+      "harness": 137,
+      "tail15": 136,
+      "tail50": 136,
+      "q": 172
+    },
+    "sees_failure": {
+      "raw": true,
+      "harness": true,
+      "tail15": true,
+      "tail50": true,
+      "q": true
+    }
+  },
+  {
+    "name": "hono-type-error",
+    "command": "bunx tsc -p tsconfig.spec.json",
+    "exit": 1,
+    "lines": 1,
+    "tokens": {
+      "raw": 29,
+      "harness": 29,
+      "tail15": 29,
+      "tail50": 29,
+      "q": 67
+    },
+    "sees_failure": {
+      "raw": true,
+      "harness": true,
+      "tail15": true,
+      "tail50": true,
+      "q": true
+    }
+  },
+  {
+    "name": "express-lint",
+    "command": "npm run lint",
+    "exit": 0,
+    "lines": 4,
+    "tokens": {
+      "raw": 14,
+      "harness": 14,
+      "tail15": 14,
+      "tail50": 14,
+      "q": 48
+    },
+    "sees_failure": null
+  }
+]

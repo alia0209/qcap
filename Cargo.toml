@@ -1,0 +1,26 @@
+[package]
+name = "qcap"
+version = "0.1.0"
+edition = "2021"
+description = "Run a command for a coding agent: keep its exit code, log the full output, print a short summary"
+license = "MIT"
+repository = "https://github.com/alia0209/qcap"
+readme = "README.md"
+keywords = ["cli", "agents", "llm", "logs", "testing"]
+categories = ["command-line-utilities", "development-tools"]
+exclude = ["bench/", "docs/", ".github/"]
+
+[[bin]]
+name = "q"
+path = "src/main.rs"
+
+[dependencies]
+libc = "0.2"
+regex = "1"
+serde_json = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
