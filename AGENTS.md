@@ -39,7 +39,8 @@ against the release binary). Needs `shellcheck`.
   `-t DUR`: SIGTERM at DUR, SIGKILL 3s later, `(timeout after DUR)`.
 - Runs longer than 10s print `q: still running · log <path>` first, so a SIGKILLed q still leaves
   the log path behind.
-- Output of at most `-n` + `--tail` lines prints in full, no sections.
+- Output of at most `-n` + `--tail` lines prints in full, no sections, and the header leaves out
+  `· log <path>` (the log holds nothing more; `q last` and `--json` still give it).
 - Longer: on failure `-- first error: line L --` then numbered grep -C3 groups, at most `-n` lines,
   only from above the tail. Groups start at strong lines (`panicked`, `error:`/`error[E..]:`,
   `error TS..`, `...Error`, `Traceback`, `REFUSED`/`refused`, `assert`, `(fail)`, `✗✖✘`, TAP

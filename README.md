@@ -55,18 +55,20 @@ We also checked whether each view contained the line that names the real failure
 |---|---|---|---|
 | raw output | 57,688 | 7/7 | yes |
 | `tail -50` | 5,984 | 6/7 | no |
-| **`q`** | **4,103** | **7/7** | **yes** |
+| **`q`** | **3,984** | **7/7** | **yes** |
 | `tail -15` | 2,261 | 6/7 | no |
 
 - **Long output gets much smaller.** express's mocha suite prints 1,972 lines, 14,903 tokens;
   `q` shows 143 (104x fewer). ripgrep's 1,404-line test run drops from 16,001 tokens to 264.
-  Over all 13 runs, `q` uses 14.1x fewer tokens than the raw output.
+  Over all 13 runs, `q` uses 14.5x fewer tokens than the raw output.
 - **A repeated failure shows once.** pytest and vitest print the same assertion message for every
   failing test and again in their closing summary. After the first failure, the error block skips
   a failure line it has already shown or that the tail will show. That cut hono's failing run
   from 698 tokens to 407.
-- **Short output costs about 35 tokens more.** When a command prints less than 55 lines, `q`
-  prints all of it plus its header line. Six of the 13 runs were that short.
+- **Short output costs about 16 tokens more.** When a command prints 55 lines or fewer, `q`
+  prints all of it under a short header (`q: exit 0 · 0.4s · 35 lines`). The log path is left
+  out there, since the log holds nothing more; `q last` prints it. Six of the 13 runs were that
+  short.
 - **`tail` is cheaper but misses failures.** On hono, vitest named the failing test more than 50
   lines from the end, so `tail -15` and `tail -50` both missed it. `tail` also hides every exit
   code.

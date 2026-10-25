@@ -24,8 +24,10 @@ check() { # check <name> <expected-exit> <actual-exit> <output> <must-contain...
   echo "ok   $name"
 }
 
-out="$("$q" true)"; check "success short" 0 $? "$out" "q: exit 0 · " "· 0 lines · log $Q_DIR/true-1.log"
-out="$("$q" true)"; check "log numbering" 0 $? "$out" "true-2.log"
+# Whole output printed: the header leaves out the log path, `q last` still has it.
+out="$("$q" true)"; check "success short" 0 $? "$out" "q: exit 0 · " "· 0 lines"
+[[ "$out" != *"· log "* ]] || { echo "FAIL success short: log path in a complete header"; fails=$((fails + 1)); }
+"$q" true >/dev/null; out="$("$q" last)"; check "log numbering" 0 $? "$out" "$Q_DIR/true-2.log"
 
 out="$("$q" bash "$fx/fail-long.sh")"; code=$?
 check "failure sections" 3 "$code" "$out" "q: exit 3 ·" "· 300 lines ·" "-- first error: line 150 --" \
@@ -107,7 +109,7 @@ out="$("$q" hook --check 'cd x && cargo test 2>&1 | tail -3')"; check "hook chec
 out="$("$q" hook --check 'rg -n foo src | head -20 && git log | head')"; check "hook check quiet" 1 $? "$out" "quiet"
 
 out="$("$q" bash -c 'printf "a\0b"; exit 5')"; check "binary output" 5 $? "$out" "· 3 bytes of binary output (not shown) · log $Q_DIR/bash-printf-1.log"
-out="$("$q" -- bash -c 'uname')"; check "slug skips flags" 0 $? "$out" "bash-uname-1.log"
+"$q" -- bash -c 'uname' >/dev/null; out="$("$q" last)"; check "slug skips flags" 0 $? "$out" "bash-uname-1.log"
 
 if ((fails > 0)); then echo "$fails cli test(s) failed"; exit 1; fi
 echo "all cli tests passed"

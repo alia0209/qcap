@@ -31,27 +31,39 @@ impl Report<'_> {
         }
     }
 
-    fn header(&self, size: &str) -> String {
+    /// `with_log` is false when the whole output is printed: the log holds nothing more, so
+    /// the path is noise (`q last` still finds it).
+    fn header(&self, size: &str, with_log: bool) -> String {
+        let log = if with_log {
+            format!(" · log {}", self.log)
+        } else {
+            String::new()
+        };
         format!(
-            "q: exit {}{} · {} · {size} · log {}\n",
+            "q: exit {}{} · {} · {size}{log}\n",
             self.outcome.code,
             self.reason(),
             duration(self.outcome.elapsed),
-            self.log
         )
     }
 
     pub fn text(&self) -> String {
         let s = self.summary;
         if s.binary {
-            return self.header(&format!("{} bytes of binary output (not shown)", s.bytes));
+            return self.header(
+                &format!("{} bytes of binary output (not shown)", s.bytes),
+                true,
+            );
         }
-        let body = match (self.grep, &s.grep) {
-            (Some(re), Some(g)) => summary::render_grep(g, re.as_str()),
-            _ => summary::render(s),
+        let (body, whole) = match (self.grep, &s.grep) {
+            (Some(re), Some(g)) => (summary::render_grep(g, re.as_str()), false),
+            _ => (summary::render(s), s.complete),
         };
         let n = s.lines;
-        self.header(&format!("{n} line{}", if n == 1 { "" } else { "s" })) + &body
+        self.header(
+            &format!("{n} line{}", if n == 1 { "" } else { "s" }),
+            !whole,
+        ) + &body
     }
 
     pub fn json(&self) -> String {
@@ -230,9 +242,6 @@ mod tests {
             summary: &s,
             grep: None,
         };
-        assert_eq!(
-            r.text(),
-            "q: exit 0 · 1.2s · 1 line · log /tmp/q/x-1.log\nhi\n"
-        );
+        assert_eq!(r.text(), "q: exit 0 · 1.2s · 1 line\nhi\n");
     }
 }

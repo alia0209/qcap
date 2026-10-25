@@ -6,7 +6,7 @@
     "lines": 1404,
     "tokens": {
       "raw": 16001,
-      "harness": 8631,
+      "harness": 8636,
       "tail15": 216,
       "tail50": 577,
       "q": 264
@@ -131,7 +131,7 @@
       "harness": 549,
       "tail15": 210,
       "tail50": 549,
-      "q": 586
+      "q": 565
     },
     "sees_failure": {
       "raw": true,
@@ -151,7 +151,7 @@
       "harness": 538,
       "tail15": 288,
       "tail50": 537,
-      "q": 574
+      "q": 554
     },
     "sees_failure": null
   },
@@ -165,7 +165,7 @@
       "harness": 388,
       "tail15": 179,
       "tail50": 388,
-      "q": 422
+      "q": 404
     },
     "sees_failure": null
   },
@@ -179,7 +179,7 @@
       "harness": 137,
       "tail15": 136,
       "tail50": 136,
-      "q": 172
+      "q": 153
     },
     "sees_failure": {
       "raw": true,
@@ -199,7 +199,7 @@
       "harness": 29,
       "tail15": 29,
       "tail50": 29,
-      "q": 67
+      "q": 45
     },
     "sees_failure": {
       "raw": true,
@@ -219,7 +219,7 @@
       "harness": 14,
       "tail15": 14,
       "tail50": 14,
-      "q": 48
+      "q": 29
     },
     "sees_failure": null
   }
