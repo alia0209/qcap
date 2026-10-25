@@ -69,7 +69,7 @@
     "tokens": {
       "raw": 3562,
       "harness": 3562,
-      "tail15": 147,
+      "tail15": 142,
       "tail50": 484,
       "q": 261
     },
@@ -151,7 +151,7 @@
       "harness": 538,
       "tail15": 288,
       "tail50": 537,
-      "q": 554
+      "q": 538
     },
     "sees_failure": null
   },
@@ -165,7 +165,7 @@
       "harness": 388,
       "tail15": 179,
       "tail50": 388,
-      "q": 404
+      "q": 388
     },
     "sees_failure": null
   },
@@ -219,7 +219,7 @@
       "harness": 14,
       "tail15": 14,
       "tail50": 14,
-      "q": 29
+      "q": 14
     },
     "sees_failure": null
   }

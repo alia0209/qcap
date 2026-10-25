@@ -55,14 +55,14 @@
 <circle cx="417.8" cy="295.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>rg-compile-error: q 565 tokens</title></circle>
 <text x="722" y="299.0" font-size="12" fill="#c3c2b7">same</text>
 <text x="178" y="329.0" font-size="12" text-anchor="end" fill="#f0efec">rg-build-clean</text>
-<line x1="415.0" y1="325.0" x2="416.7" y2="325.0" stroke="#898781" stroke-width="2"/>
+<line x1="415.0" y1="325.0" x2="415.0" y2="325.0" stroke="#898781" stroke-width="2"/>
 <circle cx="415.0" cy="325.0" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"><title>rg-build-clean: raw 538 tokens</title></circle>
-<circle cx="416.7" cy="325.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>rg-build-clean: q 554 tokens</title></circle>
+<circle cx="415.0" cy="325.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>rg-build-clean: q 538 tokens</title></circle>
 <text x="722" y="329.0" font-size="12" fill="#c3c2b7">same</text>
 <text x="178" y="359.0" font-size="12" text-anchor="end" fill="#f0efec">flask-test</text>
-<line x1="396.5" y1="355.0" x2="398.8" y2="355.0" stroke="#898781" stroke-width="2"/>
+<line x1="396.5" y1="355.0" x2="396.5" y2="355.0" stroke="#898781" stroke-width="2"/>
 <circle cx="396.5" cy="355.0" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"><title>flask-test: raw 388 tokens</title></circle>
-<circle cx="398.8" cy="355.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>flask-test: q 404 tokens</title></circle>
+<circle cx="396.5" cy="355.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>flask-test: q 388 tokens</title></circle>
 <text x="722" y="359.0" font-size="12" fill="#c3c2b7">same</text>
 <text x="178" y="389.0" font-size="12" text-anchor="end" fill="#f0efec">flask-import-error</text>
 <line x1="337.8" y1="385.0" x2="344.0" y2="385.0" stroke="#898781" stroke-width="2"/>
@@ -75,8 +75,8 @@
 <circle cx="274.9" cy="415.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>hono-type-error: q 45 tokens</title></circle>
 <text x="722" y="419.0" font-size="12" fill="#c3c2b7">q adds header</text>
 <text x="178" y="449.0" font-size="12" text-anchor="end" fill="#f0efec">express-lint</text>
-<line x1="209.0" y1="445.0" x2="250.1" y2="445.0" stroke="#898781" stroke-width="2"/>
+<line x1="209.0" y1="445.0" x2="209.0" y2="445.0" stroke="#898781" stroke-width="2"/>
 <circle cx="209.0" cy="445.0" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"><title>express-lint: raw 14 tokens</title></circle>
-<circle cx="250.1" cy="445.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>express-lint: q 29 tokens</title></circle>
-<text x="722" y="449.0" font-size="12" fill="#c3c2b7">q adds header</text>
+<circle cx="209.0" cy="445.0" r="5" fill="#d95926" stroke="#1a1a19" stroke-width="2"><title>express-lint: q 14 tokens</title></circle>
+<text x="722" y="449.0" font-size="12" fill="#c3c2b7">same</text>
 </svg>

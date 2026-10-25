@@ -24,10 +24,15 @@ check() { # check <name> <expected-exit> <actual-exit> <output> <must-contain...
   echo "ok   $name"
 }
 
-# Whole output printed: the header leaves out the log path, `q last` still has it.
-out="$("$q" true)"; check "success short" 0 $? "$out" "q: exit 0 · " "· 0 lines"
-[[ "$out" != *"· log "* ]] || { echo "FAIL success short: log path in a complete header"; fails=$((fails + 1)); }
-"$q" true >/dev/null; out="$("$q" last)"; check "log numbering" 0 $? "$out" "$Q_DIR/true-2.log"
+# Short and clean: exactly the output, no header (`q last` still has the log). Short and failed:
+# the header stays, without the log path.
+out="$("$q" bash -c 'echo hi')"; code=$?
+if [[ "$code" == 0 && "$out" == "hi" ]]; then echo "ok   success short"
+else echo "FAIL success short: [$out] exit $code"; fails=$((fails + 1)); fi
+out="$("$q" bash -c 'echo hi; exit 4')"; check "failure short" 4 $? "$out" $'q: exit 4 · ' $' · 1 line\nhi'
+[[ "$out" != *"· log "* ]] || { echo "FAIL failure short: log path in a complete header"; fails=$((fails + 1)); }
+"$q" true >/dev/null; "$q" true >/dev/null; out="$("$q" last)"
+check "log numbering" 0 $? "$out" "$Q_DIR/true-2.log"
 
 out="$("$q" bash "$fx/fail-long.sh")"; code=$?
 check "failure sections" 3 "$code" "$out" "q: exit 3 ·" "· 300 lines ·" "-- first error: line 150 --" \
@@ -74,7 +79,7 @@ sleep 0.5; kill -TERM "$qpid"; wait "$qpid"; code=$?
 check "q gets SIGTERM" 143 "$code" "$(cat "$Q_DIR/term.out")" "q: exit 143 (q got SIGTERM, command stopped)" "tick"
 
 out="$(Q_NOTE_AFTER=0.1 "$q" bash -c 'sleep 0.4; echo done')"
-check "still-running note" 0 $? "$out" $'q: still running · log '"$Q_DIR"$'/bash-sleep-1.log\nq: exit 0'
+check "still-running note" 0 $? "$out" $'q: still running · log '"$Q_DIR"$'/bash-sleep-1.log\ndone'
 out="$("$q" true)"; [[ "$out" != *"still running"* ]] || { echo "FAIL note on a fast command"; fails=$((fails + 1)); }
 
 out="$("$q" show -2 "$Q_DIR/bash-fail-long.sh-1.log")"; check "show last N" 0 $? "$out" "lines 299-300 of 300" "300: REFUSED"

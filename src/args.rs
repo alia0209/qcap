@@ -28,8 +28,9 @@ options:
   -h, --help   this help
 
 output: one header line `q: exit 1 · 3.2s · 1840 lines · log /tmp/q/bun-test-3.log`, then the
-first error block and the last lines. Short output prints whole, under a header without the log
-path (`q last` has it). Exit code = the command's
+first error block and the last lines. Short output prints whole: with no header at all if the
+command exited 0, else under a header without the log path (`q last` has it). Exit code = the
+command's
 (128+signal if killed). Runs over 10s first print `q: still running · log <path>`. If q itself
 gets SIGTERM/SIGINT/SIGHUP it stops the command, prints the summary, exits 128+signal.
 Logs live in /tmp/q. To run a command named last/show/hook: q -- last.";

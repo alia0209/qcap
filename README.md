@@ -2,7 +2,7 @@
 
 `q` runs a command for a coding agent. It keeps the command's exit code, saves the full output
 to a log file, and prints a short summary: one header line, the first error, and the last 15
-lines.
+lines. When the output is short and the command succeeded, it prints just the output.
 
 ```console
 $ q cargo test --workspace
@@ -55,20 +55,20 @@ We also checked whether each view contained the line that names the real failure
 |---|---|---|---|
 | raw output | 57,688 | 7/7 | yes |
 | `tail -50` | 5,984 | 6/7 | no |
-| **`q`** | **3,984** | **7/7** | **yes** |
-| `tail -15` | 2,261 | 6/7 | no |
+| **`q`** | **3,937** | **7/7** | **yes** |
+| `tail -15` | 2,256 | 6/7 | no |
 
 - **Long output gets much smaller.** express's mocha suite prints 1,972 lines, 14,903 tokens;
   `q` shows 143 (104x fewer). ripgrep's 1,404-line test run drops from 16,001 tokens to 264.
-  Over all 13 runs, `q` uses 14.5x fewer tokens than the raw output.
+  Over all 13 runs, `q` uses 14.7x fewer tokens than the raw output.
 - **A repeated failure shows once.** pytest and vitest print the same assertion message for every
   failing test and again in their closing summary. After the first failure, the error block skips
   a failure line it has already shown or that the tail will show. That cut hono's failing run
   from 698 tokens to 407.
-- **Short output costs about 16 tokens more.** When a command prints 55 lines or fewer, `q`
-  prints all of it under a short header (`q: exit 0 · 0.4s · 35 lines`). The log path is left
-  out there, since the log holds nothing more; `q last` prints it. Six of the 13 runs were that
-  short.
+- **Short output costs nothing extra when it passes.** When a command prints 55 lines or fewer
+  and exits 0, `q` prints exactly its output, with no header. If it failed or was stopped, a short
+  header comes first (`q: exit 4 · 0.4s · 12 lines`, about 16 tokens), because the exit code is
+  the point. `q last` prints the log path either way. Six of the 13 runs were that short.
 - **`tail` is cheaper but misses failures.** On hono, vitest named the failing test more than 50
   lines from the end, so `tail -15` and `tail -50` both missed it. `tail` also hides every exit
   code.

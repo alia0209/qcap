@@ -59,6 +59,12 @@ impl Report<'_> {
             (Some(re), Some(g)) => (summary::render_grep(g, re.as_str()), false),
             _ => (summary::render(s), s.complete),
         };
+        // A short clean run prints exactly its output: the header would only repeat what the
+        // agent already sees (exit 0, every line), so it costs tokens and says nothing.
+        let o = self.outcome;
+        if whole && o.code == 0 && o.stopped.is_none() && o.signal.is_none() {
+            return body;
+        }
         let n = s.lines;
         self.header(
             &format!("{n} line{}", if n == 1 { "" } else { "s" }),
@@ -242,6 +248,6 @@ mod tests {
             summary: &s,
             grep: None,
         };
-        assert_eq!(r.text(), "q: exit 0 · 1.2s · 1 line\nhi\n");
+        assert_eq!(r.text(), "hi\n");
     }
 }

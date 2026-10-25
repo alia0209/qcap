@@ -40,7 +40,9 @@ against the release binary). Needs `shellcheck`.
 - Runs longer than 10s print `q: still running · log <path>` first, so a SIGKILLed q still leaves
   the log path behind.
 - Output of at most `-n` + `--tail` lines prints in full, no sections, and the header leaves out
-  `· log <path>` (the log holds nothing more; `q last` and `--json` still give it).
+  `· log <path>` (the log holds nothing more; `q last` and `--json` still give it). If the run was
+  also clean (exit 0, not stopped or killed, no `--grep`) there is no header at all: stdout is
+  exactly the cleaned output.
 - Longer: on failure `-- first error: line L --` then numbered grep -C3 groups, at most `-n` lines,
   only from above the tail. Groups start at strong lines (`panicked`, `error:`/`error[E..]:`,
   `error TS..`, `...Error`, `Traceback`, `REFUSED`/`refused`, `assert`, `(fail)`, `✗✖✘`, TAP
