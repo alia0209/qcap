@@ -197,10 +197,18 @@ pub fn explain(command: &str) -> Option<Hint> {
             return None;
         };
         let stage = command[s.start..s.start + len].trim();
+        // Keep the rest of the line (`cd x && ...`, `... && echo ok`): only the capped statement
+        // changes, so the rewrite still runs where and when the original would.
+        let before = command[..s.start].trim_end();
+        let after = command[s.start + s.text.trim_end().len()..].trim_end();
+        let suggestion = suggest(stage).map(|q| {
+            let sep = if before.is_empty() { "" } else { " " };
+            format!("{before}{sep}{q}{after}")
+        });
         Some(Hint {
             why,
             command: stage.to_string(),
-            suggestion: suggest(stage),
+            suggestion,
         })
     })
 }
@@ -294,9 +302,10 @@ mod tests {
 
     #[test]
     fn suggests_the_q_form() {
+        // Dropping the `cd x &&` sent agents that copied the rewrite to the wrong directory.
         assert_eq!(
             suggestion("cd x && cargo test --quiet 2>&1 | tail -3").as_deref(),
-            Some("q cargo test --quiet")
+            Some("cd x && q cargo test --quiet")
         );
         assert_eq!(
             suggestion("FOO=1 bun test | tail").as_deref(),
@@ -309,7 +318,7 @@ mod tests {
         assert_eq!(suggestion("bun test -t 'it' | tail"), None);
         assert_eq!(
             suggestion("npm publish 2>/dev/null | tail -1 && echo ok").as_deref(),
-            Some("q npm publish")
+            Some("q npm publish && echo ok")
         );
         assert_eq!(suggestion("for f in a; do tsc $f | head; done"), None);
         let h = explain("echo é; bun test 2>&1 | tail -1").unwrap();

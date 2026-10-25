@@ -89,7 +89,7 @@ fn run_cmd(opts: &RunOpts) -> i32 {
         log_path: &log_path,
     };
     let outcome = run::run(&opts.cmd, file, &watch);
-    let raw = std::fs::read(&path).unwrap_or_default();
+    let raw = text::read(&path).unwrap_or(text::Bytes::Empty);
     let report = report::Report {
         cmd: &opts.cmd,
         outcome: &outcome,

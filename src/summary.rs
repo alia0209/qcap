@@ -1,6 +1,7 @@
 //! Picks what to print from the log lines: everything if short, else the first error block
 //! (failures only) and the tail, or only grep matches.
 
+use crate::text::Line;
 use regex::Regex;
 use std::sync::OnceLock;
 
@@ -52,7 +53,7 @@ fn is_strong(line: &str) -> bool {
 }
 
 /// Which lines start error groups: the strong ones when there are any, else every error line.
-fn matcher(lines: &[String]) -> fn(&str) -> bool {
+fn matcher(lines: &[Line]) -> fn(&str) -> bool {
     if lines.iter().any(|l| is_strong(l)) {
         is_strong
     } else {
@@ -62,7 +63,7 @@ fn matcher(lines: &[String]) -> fn(&str) -> bool {
 
 /// Line indices (0-based) of the first error block: grep -C3 groups from the first match on,
 /// at most `budget` lines.
-pub fn error_block(lines: &[String], budget: usize) -> Vec<usize> {
+pub fn error_block(lines: &[Line], budget: usize) -> Vec<usize> {
     let hit = matcher(lines);
     let mut picked: Vec<usize> = Vec::new();
     for (i, l) in lines.iter().enumerate() {
@@ -103,7 +104,7 @@ pub struct Picked {
     pub tail_from: usize,
 }
 
-pub fn pick(lines: &[String], budget: usize, tail: usize, failed: bool) -> Picked {
+pub fn pick(lines: &[Line], budget: usize, tail: usize, failed: bool) -> Picked {
     if lines.len() <= budget + tail {
         return Picked {
             complete: true,
@@ -144,7 +145,7 @@ pub fn pick(lines: &[String], budget: usize, tail: usize, failed: bool) -> Picke
     }
 }
 
-pub fn render(lines: &[String], p: &Picked) -> String {
+pub fn render(lines: &[Line], p: &Picked) -> String {
     let mut out = String::new();
     if p.complete {
         for l in lines {
@@ -187,12 +188,12 @@ pub fn render(lines: &[String], p: &Picked) -> String {
 }
 
 #[cfg(test)]
-pub fn sections(lines: &[String], budget: usize, tail: usize, failed: bool) -> String {
+pub fn sections(lines: &[Line], budget: usize, tail: usize, failed: bool) -> String {
     render(lines, &pick(lines, budget, tail, failed))
 }
 
 /// Matching line indices, at most `budget`, plus the total count.
-pub fn grep_hits(lines: &[String], re: &Regex, budget: usize) -> (Vec<usize>, usize) {
+pub fn grep_hits(lines: &[Line], re: &Regex, budget: usize) -> (Vec<usize>, usize) {
     let all: Vec<usize> = (0..lines.len())
         .filter(|&i| re.is_match(&lines[i]))
         .collect();
@@ -200,7 +201,7 @@ pub fn grep_hits(lines: &[String], re: &Regex, budget: usize) -> (Vec<usize>, us
     (all.into_iter().take(budget).collect(), total)
 }
 
-pub fn grep(lines: &[String], re: &Regex, budget: usize) -> String {
+pub fn grep(lines: &[Line], re: &Regex, budget: usize) -> String {
     let (hits, total) = grep_hits(lines, re, budget);
     let mut out = String::new();
     for &i in &hits {
@@ -221,8 +222,8 @@ pub fn grep(lines: &[String], re: &Regex, budget: usize) -> String {
 mod tests {
     use super::*;
 
-    fn numbered(n: usize) -> Vec<String> {
-        (1..=n).map(|i| format!("line {i}")).collect()
+    fn numbered(n: usize) -> Vec<Line<'static>> {
+        (1..=n).map(|i| format!("line {i}").into()).collect()
     }
 
     #[test]
@@ -249,10 +250,12 @@ mod tests {
 
     #[test]
     fn strong_errors_beat_a_failed_roll_call() {
-        let mut l: Vec<String> = (0..100).map(|i| format!("test t{i} ... FAILED")).collect();
+        let mut l: Vec<Line> = (0..100)
+            .map(|i| format!("test t{i} ... FAILED").into())
+            .collect();
         l.push("thread 't0' panicked at src/lib.rs:4:5:".into());
         l.push("assertion `left == right` failed: case 0".into());
-        l.extend((0..30).map(|i| format!("pad {i}")));
+        l.extend((0..30).map(|i| format!("pad {i}").into()));
         let out = sections(&l, 20, 5, true);
         assert!(out.contains("-- first error: line 101 --"));
         assert!(out.contains("102: assertion `left == right` failed"));
@@ -287,7 +290,7 @@ mod tests {
 
     #[test]
     fn budget_caps_error_block() {
-        let l: Vec<String> = (0..500).map(|i| format!("error {i}")).collect();
+        let l: Vec<Line> = (0..500).map(|i| format!("error {i}").into()).collect();
         assert_eq!(error_block(&l, 40).len(), 40);
         let out = sections(&l, 10, 5, true);
         assert!(out.contains("-- 485 more error lines before the tail: q show 11-495 --"));

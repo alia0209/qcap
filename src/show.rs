@@ -53,9 +53,19 @@ pub fn show(first: Option<&str>, second: Option<&str>) -> Result<String, String>
         Some(p) => PathBuf::from(p),
         None => PathBuf::from(last()?),
     };
-    let raw = std::fs::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let raw = text::read(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     let lines = text::lines(&raw);
+    if lines.is_empty() {
+        return Ok(format!("-- {} is empty --\n", path.display()));
+    }
     let (a, b) = range(spec, lines.len())?;
+    if a > lines.len() {
+        return Err(format!(
+            "line {a} is past the end of {} ({} lines)",
+            path.display(),
+            lines.len()
+        ));
+    }
     let b = b.min(lines.len()).min(a + MAX_SPAN - 1);
     let mut out = format!(
         "-- {} lines {a}-{b} of {} --\n",

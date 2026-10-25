@@ -58,7 +58,7 @@ impl Report<'_> {
         self.header(&format!("{n} line{}", if n == 1 { "" } else { "s" })) + &body
     }
 
-    fn pick(&self, lines: &[String]) -> summary::Picked {
+    fn pick(&self, lines: &[text::Line]) -> summary::Picked {
         summary::pick(lines, self.budget, self.tail, self.outcome.code != 0)
     }
 
